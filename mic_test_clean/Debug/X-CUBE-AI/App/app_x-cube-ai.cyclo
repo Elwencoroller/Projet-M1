@@ -1,0 +1,7 @@
+../X-CUBE-AI/App/app_x-cube-ai.c:128:13:ai_log_err	2
+../X-CUBE-AI/App/app_x-cube-ai.c:141:12:ai_boostrap	4
+../X-CUBE-AI/App/app_x-cube-ai.c:184:12:ai_run	2
+../X-CUBE-AI/App/app_x-cube-ai.c:199:5:acquire_and_process_data	4
+../X-CUBE-AI/App/app_x-cube-ai.c:214:5:post_process	7
+../X-CUBE-AI/App/app_x-cube-ai.c:276:6:MX_X_CUBE_AI_Init	1
+../X-CUBE-AI/App/app_x-cube-ai.c:285:6:MX_X_CUBE_AI_Process	7
