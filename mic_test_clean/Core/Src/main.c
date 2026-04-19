@@ -28,6 +28,8 @@
 #include <string.h>
 #include "mel_filterbank.h"
 #include "dct_matrix.h"
+#include "yes_input_q7.h"
+#include "yes_audio_pcm.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -37,7 +39,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define APP_MODE_STATIC_PCM_TO_AI  15
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -93,7 +95,7 @@ static int16_t audio_buf[AUDIO_BUF_SAMPLES];
 #define APP_MODE_AUDIO_PREPARE_Q7_INPUT       13
 #define APP_MODE_AUDIO_MIC_TO_AI              14
 
-#define APP_MODE APP_MODE_AUDIO_MIC_TO_AI
+#define APP_MODE APP_MODE_STATIC_PCM_TO_AI
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -327,6 +329,11 @@ volatile int8_t dbg_q7_min = 0;
 volatile int8_t dbg_q7_max = 0;
 
 volatile uint8_t ai_use_mic_q7 = 0;
+
+volatile uint32_t pcm_mismatch_count = 0;
+volatile int8_t   pcm_first_mismatch_stm32 = 0;
+volatile int8_t   pcm_first_mismatch_ref = 0;
+volatile uint32_t pcm_first_mismatch_idx = 0;
 
 static int16_t pre_roll_buf[PRE_ROLL_SAMPLES];
 volatile uint32_t pre_roll_write_idx = 0;
@@ -1230,7 +1237,8 @@ int main(void)
 		(APP_MODE == APP_MODE_AUDIO_PREPARE_MEL_ALL) || \
 		(APP_MODE == APP_MODE_AUDIO_PREPARE_MFCC_ALL) || \
 		(APP_MODE == APP_MODE_AUDIO_PREPARE_Q7_INPUT) || \
-		(APP_MODE == APP_MODE_AUDIO_MIC_TO_AI)
+		(APP_MODE == APP_MODE_AUDIO_MIC_TO_AI) || \
+		(APP_MODE == APP_MODE_STATIC_PCM_TO_AI)
 
     capture_reset();
     model_audio_reset();
@@ -1395,6 +1403,46 @@ int main(void)
 	#endif
 
 	#if (APP_MODE == APP_MODE_AUDIO_MIC_TO_AI)
+	  if (ai_request_after_capture && model_q7_ready && !ai_done_after_capture)
+	  {
+		  ai_request_after_capture = 0;
+		  ai_done_after_capture = 1;
+		  MX_X_CUBE_AI_Process();
+	  }
+	#endif
+
+	#if (APP_MODE == APP_MODE_STATIC_PCM_TO_AI)
+	  if (!dbg_cap_stats_ready)
+	  {
+		  memcpy(model_audio_input, yes_audio_pcm, sizeof(model_audio_input));
+		  model_audio_ready = 1;
+		  model_float_prepare_from_model_audio();
+		  frames_prepare_from_float();
+		  hamming_prepare();
+		  mfcc_prepare_from_frames();
+		  model_q7_prepare_from_mfcc();
+		  ai_use_mic_q7 = 1;
+
+		  pcm_mismatch_count = 0;
+		  for (uint32_t i = 0; i < MODEL_INPUT_SIZE; i++)
+		  {
+			  if (model_input_q7_from_mic[i] != yes_input_q7[i])
+			  {
+				  if (pcm_mismatch_count == 0)
+				  {
+					  pcm_first_mismatch_stm32 = model_input_q7_from_mic[i];
+					  pcm_first_mismatch_ref   = yes_input_q7[i];
+					  pcm_first_mismatch_idx   = i;
+				  }
+				  pcm_mismatch_count++;
+			  }
+		  }
+
+		  dbg_cap_stats_ready = 1;
+		  model_q7_ready = 1;
+		  ai_request_after_capture = 1;
+	  }
+
 	  if (ai_request_after_capture && model_q7_ready && !ai_done_after_capture)
 	  {
 		  ai_request_after_capture = 0;
